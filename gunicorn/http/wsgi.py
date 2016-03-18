@@ -8,6 +8,7 @@ import os
 import re
 import sys
 
+from gunicorn.http.errors import InvalidHeader, InvalidHeaderName
 from gunicorn.six import unquote_to_wsgi_str, string_types, binary_type, reraise
 from gunicorn import SERVER_SOFTWARE
 import gunicorn.six as six
@@ -23,6 +24,8 @@ except ImportError:
         sendfile = None
 
 NORMALIZE_SPACE = re.compile(r'(?:\r\n)?[ \t]+')
+HEADER_RE = re.compile(r"[\x00-\x1F\x7F()<>@,;:\[\]={} \t\\\"]")
+HEADER_VALUE_RE = re.compile(r'[\x00-\x1F\x7F]')
 
 log = logging.getLogger(__name__)
 
@@ -226,6 +229,12 @@ class Response(object):
     def process_headers(self, headers):
         for name, value in headers:
             assert isinstance(name, string_types), "%r is not a string" % name
+
+            if HEADER_RE.search(name):
+                raise InvalidHeaderName('%r' % name)
+
+            if HEADER_VALUE_RE.search(value):
+                raise InvalidHeader('%r' % value)
 
             value = str(value).strip()
             lname = name.lower().strip()
